@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title>Jogo da cobrinha</title>
+        <style>
+            body{
+                background: #9ccb95;
+                height: 100%;
+                margin: 0px;
+                padding: 0px;
+            }
+            canvas{
+                position: absolute;
+                top: 0px;
+                bottom: 0px;
+                left: 0px;
+                right: 0px;
+                margin: auto;
+            }
+        </style>
+        <script src="mapeamento.js"></script>
+    </head>
+    <body>
+        <script>
+            var ctx, canvas, img, LARGURA, ALTURA, rad = Math.PI / 180, distancia = 20,
+                estado = {
+                    jogar: 0,
+                    jogando: 1,
+                    perdeu: 2
+                },
+                colisao = {
+                    isColised: function(el1, el2){
+                        let tam = el2.obj.length;
+                        for(let i = 0; i < tam; i++)
+                           if((el1.obj.pX + el1.larg >= el2.obj[i].pX && el1.obj.pX <= el2.obj[i].pX + el2.larg) &&
+                              (el1.obj.pY + el1.alt  >= el2.obj[i].pY && el1.obj.pY <= el2.obj[i].pY + el2.alt ))
+                                return true;
+                        return false;
+                    }                    
+                },
+                
+                direcao = {
+                    up:    {x: 0, y:-1, r: 0},
+                    down:  {x: 0, y: 1, r: rad * 180},
+                    left:  {x: 1, y: 0, r: rad * 90},
+                    right: {x:-1, y: 0, r: rad * 270}
+                },
+                
+                jogador = {
+                    estado: estado.jogar,
+                    
+                    perder: function(){
+                        this.estado = estado.perdeu;
+                        setTimeout(function(){
+                            alert("Fim de jogo. Você bateu em um obstáculo");
+                        }, 500);                        
+                        setTimeout(function(){
+                            if(confirm("Deseja jogar novamente? [OK]"))
+                                novoJogo();
+                        }, 1000);                             
+                    }
+                },
+				fruta = {
+					pX: 0,
+					pY: 0,
+					
+					desenha: function(){
+						fruta_map.desenha(this.pX, this.pY);
+					},
+					
+					novaPosicao: function(){
+                        let sX = Math.floor(Math.random() * LARGURA - fruta_map.largura);
+                        let sY = Math.floor(Math.random() * ALTURA - fruta_map.altura);                            
+                        this.pX = (sX - sX % obstaculo.largura) + obstaculo.largura / 2 - fruta_map.largura / 2;
+						this.pY = (sY - sY % obstaculo.altura)  + obstaculo.altura / 2 - fruta_map.altura / 2;
+                        
+                        //insere em posição não restrita
+                        if(this.restritPosition())
+                            this.novaPosicao();
+					},
+                    restritPosition: function(){
+                        if(colisao.isColised( // verificase foi inserido em obstáculo
+                            {larg: fruta_map.largura,
+                             alt : fruta_map.altura,
+                             obj : {pX: fruta.pX, pY: fruta.pY}},
+                            {larg: obstaculo.largura,
+                             alt : obstaculo.altura,
+                             obj : obstaculos.obs
+                            }
+                        ))
+                            return true;
+                        if(colisao.isColised(//evita procimidade com cobrinha
+                            {larg: cobra_cabeca.largura * 3,
+                             alt : cobra_cabeca.altura * 3,
+                             obj : {pX: cobrinha.front.pX -cobra_cabeca.largura, pY: cobrinha.front.pY -cobra_cabeca.altura}},
+                            {larg: fruta_map.largura,
+                             alt : fruta_map.altura,
+                             obj : {pX: fruta.pX, pY: fruta.pY}
+                            }
+                        ))
+                            return true;
+                        return false;
+                    },
+                    reset: function(){             
+                        let sX = Math.floor(LARGURA * 0.5 + Math.random() * LARGURA * 0.4);
+                        this.pX = (sX - sX % obstaculo.largura) + obstaculo.largura / 2 - fruta_map.largura / 2;
+						this.pY = cobrinha.front.pY;
+                        
+                        //insere em posição não restrita
+                        if(this.restritPosition())
+                            this.reset();
+                   }
+				},
+                
+                cobrinha = {
+                    body: [{
+                        pX: 0, 
+                        pY: 0,
+                        dX: 1,
+                        dY: 0,
+                        task: {}
+                    }],
+                    front: {pX: Math.floor(window.innerWidth / 2), pY: fruta.pY},
+                    direcao: direcao.left,
+                    velocidade: 4,
+                    comprimento: 1,
+                    
+                    desenha: function(){
+                        this.desenhaCorpo();
+                        this.desenhaCabeca();
+                    },
+                    
+                    atualiza: function(){
+                        this.colisao();                        
+                        
+                        this.front.pX += this.direcao.x * this.velocidade;
+                        this.front.pY += this.direcao.y * this.velocidade;
+                        
+                        let tam = this.body.length;
+                        for(let i = tam -1; i >=0; i--){
+                            let item = this.body[i];
+                            
+                            if(item.dX == 0 && item.dY == 0){
+                                let dX = item.pX - this.body[i -1].pX;
+                                let dY = item.pY - this.body[i -1].pY;
+                                if(dX < 0)
+                                    dX *= -1;
+                                if(dY < 0)
+                                    dY *= -1;
+                                if(dX + dY >= distancia){
+                                    if(item.tmp){
+                                        item.dX = item.tmp.phDX;
+                                        item.dY = item.tmp.phDY;
+                                        delete item.tmp;
+                                    }
+                                }
+                            }
+                            
+                            if(Object.keys(item.task).length > 0){
+                                if(item.task.pX == item.pX && item.task.pY == item.pY){
+                                    item.dX = item.task.dX;
+                                    item.dY = item.task.dY;
+                                    if(i != tam -1)
+                                        this.body[i +1].task = item.task;
+                                    item.task = {};
+                                }
+                            }
+                            
+                            this.body[i].pX += this.body[i].dX * this.velocidade;
+                            this.body[i].pY += this.body[i].dY * this.velocidade;
+                        }
+                    },
+                    
+                    desenhaCabeca: function(){
+                        ctx.save();
+                        ctx.translate(this.front.pX + cobra_corpo.largura / 2, this.front.pY + cobra_corpo.altura / 2);
+                        ctx.rotate(this.direcao.r);                        
+                        cobra_cabeca.desenha(-cobra_corpo.largura / 2 , -cobra_corpo.altura / 2);
+                        ctx.restore();
+                    },
+                    
+                    desenhaCorpo: function(){
+                        let tam = this.body.length;
+                        for(let i = tam -1; i >=0; i--){
+                            let item = this.body[i];
+                            
+                            cobra_corpo.desenha(this.body[i].pX, this.body[i].pY);
+                        }
+                        
+                        //this.body.splice(0, 0, this.front);
+                    },                    
+                    novaParte: function(){
+                        let item = this.body[this.comprimento -1];
+                        this.body.push({
+                            pX: item.pX, 
+                            pY: item.pY,
+                            dX: 0,
+                            dY: 0,
+                            task: {},
+                            tmp: {phDX: item.dX,phDY: item.dY}
+                        });
+                        this.comprimento++;
+                    },
+                    colisao: function(){
+                        //tela
+                        if(this.front.pX <= 0 || this.front.pX + cobra_cabeca.largura >= LARGURA ||
+						   this.front.pY <= 0 || this.front.pY + cobra_cabeca.altura >= ALTURA){
+                           jogador.perder();
+                        }
+                        //fruta           
+                        if(colisao.isColised(
+                            {larg: cobra_cabeca.largura,
+                             alt : cobra_cabeca.altura,
+                             obj : {pX: this.front.pX, pY: this.front.pY}},
+                            {larg: fruta_map.largura,
+                             alt : fruta_map.altura,
+                             obj : [{pX: fruta.pX, pY: fruta.pY}]
+                            }
+                        )){
+                            this.novaParte();
+                            fruta.novaPosicao(); 
+                        }
+                        //corpo
+						let tam = this.body.length;
+                        for(let i = tam -1; i > 3; i--){
+                            let item = this.body[i];
+                            if(this.front.pX + cobra_cabeca.largura >= item.pX && 
+                               this.front.pX <= item.pX + cobra_corpo.largura){
+                                  if(this.front.pY + cobra_cabeca.altura >= item.pY && 
+                                     this.front.pY <= item.pY + cobra_corpo.altura){
+                                          jogador.perder();
+                                  }
+                            }
+                        }
+                    },
+                    restritPosition(){
+                        if(colisao.isColised( // verificase foi inserido em obstáculo
+                            {larg: cobra_cabeca.largura * 7,
+                             alt : cobra_cabeca.altura,
+                             obj : {pX: cobrinha.front.pX - cobra_cabeca.largura, pY: cobrinha.front.pY}},
+                            //restringe trez espaços antes da colisão
+                            {larg: obstaculo.largura,
+                             alt : obstaculo.altura,
+                             obj : obstaculos.obs
+                            }
+                        ))
+                            return true;
+                        return false;
+                    },
+                    newPosition: function(){
+                        let sX = Math.floor(cobra_corpo.largura * 2 + window.innerWidth / 2 * Math.random());
+                        let sY = Math.floor(window.innerHeight * 0.5);                            
+                        this.front = {pX: (sX - sX % obstaculo.largura) + obstaculo.largura / 2 - fruta_map.largura / 2, pY: (sY - sY % obstaculo.altura)  + obstaculo.altura / 2 - fruta_map.altura / 2};
+                    },
+                    reset: function(){
+                        let tent;
+                        this.newPosition();
+                        for(tent = 0; this.restritPosition() && tent < 10; tent ++)
+                            this.newPosition();                
+                        
+                        if(tent == 10)
+                            novoJogo();
+            
+                        this.body = [{
+                            pX: this.front.pX -distancia, 
+                            pY: this.front.pY,
+                            dX: 1,
+                            dY: 0,
+                            task: {}
+                        }];
+                        this.direcao = direcao.left;
+                        this.comprimento = 1;
+                        
+                        
+                    }
+                },
+                obstaculos = {
+                    obs: [{}],
+                    qtd: 10,
+                    tam: 5,                
+                    
+                    desenha: function(){
+                        ctx.fillStyle = "#9ccb95";
+                        ctx.fillRect(0, 0, LARGURA, ALTURA);
+                        this.printObs();
+                    },
+                    atualiza: function(){
+                        this.colisao();  
+                    },
+                    startObs: function(){
+                        this.obs = [];
+                        let startPosition = {};
+                        let rand, sX, sY;
+                        for(let s = 0; s < this.qtd; s++){
+                            sX = Math.floor((window.innerWidth - obstaculo.largura) * Math.random());
+                            sY = Math.floor((window.innerHeight - obstaculo.largura) * Math.random());
+                            startPosition = {//blocos de acesso
+                               pX: sX - sX % obstaculo.largura,
+                               pY: sY - sY % obstaculo.altura
+                            };
+                            this.obs.push(startPosition);
+                        
+                            let position = {};
+                            let tam = 0;
+                            let dir = direcao.right;
+                            for(let i = 0; i < this.tam; i++){
+                                rand = Math.floor(1 + Math.random() * 10);//1 - 10
+                                tam = this.obs.length -1;
+                                switch(rand){
+                                    case 1://up
+                                        dir = direcao.up;
+                                        break;
+                                    case 2://down
+                                        dir = direcao.down;
+                                        break;
+                                    case 3://rigth
+                                        dir = direcao.right;
+                                        break;
+                                    case 4://left
+                                        dir = direcao.left;
+                                        break;
+                                };
+                                position = {
+                                    pX: this.obs[tam].pX += dir.x * obstaculo.largura,
+                                    pY: this.obs[tam].pY += dir.y * obstaculo.altura
+                                };
+                                this.obs.push(position);                            
+                            }  
+                        }
+                    },
+                    printObs: function(){
+                        let tam = this.obs.length;
+                        for(let i = 0; i < tam; i++)
+                            obstaculo.desenha(this.obs[i].pX, this.obs[i].pY);
+                    },
+                    colisao: function(){
+                        if(colisao.isColised(
+                            {larg: cobra_cabeca.largura,
+                             alt : cobra_cabeca.altura,
+                             obj : {pX: cobrinha.front.pX, pY: cobrinha.front.pY}},
+                            {larg: obstaculo.largura,
+                             alt : obstaculo.altura,
+                             obj : this.obs
+                            }
+                        ))
+                            jogador.perder();                        
+                    }
+                };
+            
+            function resizeWindow(){
+                LARGURA = window.innerWidth;
+                ALTURA = window.innerHeight;
+                
+                canvas.width = LARGURA;
+                canvas.height = ALTURA;
+            }
+            
+            function teclado(ev){
+                var key = ev.keyCode;
+                if(key == 13)
+                    roda();
+                if(key < 41 && key > 36){
+                    if(Object.keys(cobrinha.body[0].task).length > 0)
+                        return;
+                    if(jogador.estado == estado.jogar)
+                       jogador.estado = estado.jogando;
+                    switch(key){
+                        case 37:
+                            if(cobrinha.direcao == direcao.left)
+                                return;
+                            cobrinha.direcao = direcao.right;
+                            break;
+                        case 38:   
+                            if(cobrinha.direcao == direcao.down)
+                                return;
+                            cobrinha.direcao = direcao.up;
+                            break;
+                        case 39:
+                            if(cobrinha.direcao == direcao.right)
+                                return;
+                            cobrinha.direcao = direcao.left;
+                            break;
+                        case 40:
+                            if(cobrinha.direcao == direcao.up)
+                                return;
+                            cobrinha.direcao = direcao.down;
+                            break;
+                    }
+                    var cob = cobrinha;
+                    cobrinha.body[0].task = {
+                                                pX: cob.front.pX, 
+                                                pY: cob.front.pY,
+                                                dX: cob.direcao.x,
+                                                dY: cob.direcao.y
+                                            };
+                }
+            }
+            
+            function atualiza(){
+                if(jogador.estado == estado.jogando){
+                    cobrinha.atualiza();
+                    obstaculos.atualiza();
+                }
+            }
+            
+            function desenha(){
+                obstaculos.desenha();
+				cobrinha.desenha();
+				fruta.desenha();
+			}
+            
+            function roda(){
+                atualiza();
+                if(jogador.estado == estado.jogando)
+                    desenha();
+                //setTimeout(roda, 1000);
+                window.requestAnimationFrame(roda);
+            }
+			
+			function novoJogo(){
+                obstaculos.startObs();
+                cobrinha.reset();
+                fruta.reset();
+				jogador.estado = estado.jogando;
+			}
+            
+            function main(){
+                
+                canvas = document.createElement("canvas");
+                
+                resizeWindow();
+                
+                ctx = canvas.getContext("2d");
+                document.body.appendChild(canvas);
+                
+                window.addEventListener("resize", resizeWindow);
+                document.addEventListener("keydown", teclado);
+                
+                img = new Image();
+                img.src = "cobrinha.png";
+				
+				novoJogo();
+                
+                roda();
+            }
+            
+            window.addEventListener("load", main);
+        </script>
+    </body>
+</html>
